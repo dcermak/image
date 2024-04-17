@@ -1,3 +1,4 @@
+//go:build !containers_image_storage_stub
 // +build !containers_image_storage_stub
 
 package storage
@@ -66,7 +67,11 @@ func imageMatchesRepo(image *storage.Image, ref reference.Named) bool {
 func imageMatchesSystemContext(store storage.Store, img *storage.Image, manifestDigest digest.Digest, sys *types.SystemContext) bool {
 	// First, check if the image record has a manifest that matches the
 	// specified digest.
-	key := manifestBigDataKey(manifestDigest)
+	key, err := manifestBigDataKey(manifestDigest)
+	if err != nil {
+		return false // This should never happen, manifestDigest comes from a reference.Digested, and that validates the format.
+	}
+
 	manifestBytes, err := store.ImageBigData(img.ID, key)
 	if err != nil {
 		return false
@@ -84,7 +89,10 @@ func imageMatchesSystemContext(store storage.Store, img *storage.Image, manifest
 		if err != nil {
 			return false
 		}
-		key = manifestBigDataKey(manifestDigest)
+		key, err = manifestBigDataKey(manifestDigest)
+		if err != nil {
+			return false
+		}
 		manifestBytes, err = store.ImageBigData(img.ID, key)
 		if err != nil {
 			return false
@@ -103,6 +111,7 @@ func imageMatchesSystemContext(store storage.Store, img *storage.Image, manifest
 	if err != nil {
 		return false
 	}
+
 	// Build a dummy index containing one instance and information about
 	// the image's target system from the image's configuration.
 	index := manifest.OCI1IndexFromComponents([]imgspecv1.Descriptor{{
@@ -122,7 +131,11 @@ func imageMatchesSystemContext(store storage.Store, img *storage.Image, manifest
 	}
 	// Double-check that we can read the runnable image's manifest from the
 	// image record.
-	key = manifestBigDataKey(instanceDigest)
+	key, err = manifestBigDataKey(instanceDigest)
+
+	if err != nil {
+		return false
+	}
 	_, err = store.ImageBigData(img.ID, key)
 	return err == nil
 }
