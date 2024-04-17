@@ -84,8 +84,11 @@ func manifestBigDataKey(digest digest.Digest) (string, error) {
 
 // signatureBigDataKey returns a key suitable for recording the signatures associated with the manifest with the specified digest using storage.Store.ImageBigData and related functions.
 // If a specific manifest digest is explicitly requested by the user, the key returned by this function should be used preferably;
-func signatureBigDataKey(digest digest.Digest) string {
-	return "signature-" + digest.Encoded()
+func signatureBigDataKey(digest digest.Digest) (string, error) {
+	if err := digest.Validate(); err != nil { // digest.Digest.Encoded() panics on failure, so validate explicitly.
+		return "", err
+	}
+	return "signature-" + digest.Encoded(), nil
 }
 
 // newImageSource sets up an image for reading.
@@ -194,7 +197,10 @@ func (s *storageImageSource) getBlobAndLayerID(info types.BlobInfo) (rc io.ReadC
 // GetManifest() reads the image's manifest.
 func (s *storageImageSource) GetManifest(ctx context.Context, instanceDigest *digest.Digest) (manifestBlob []byte, MIMEType string, err error) {
 	if instanceDigest != nil {
-		key := manifestBigDataKey(*instanceDigest)
+		key, err := manifestBigDataKey(*instanceDigest)
+		if err != nil {
+			return nil, "", err
+		}
 		blob, err := s.imageRef.transport.store.ImageBigData(s.image.ID, key)
 		if err != nil {
 			return nil, "", errors.Wrapf(err, "error reading manifest for image instance %q", *instanceDigest)
@@ -206,7 +212,10 @@ func (s *storageImageSource) GetManifest(ctx context.Context, instanceDigest *di
 		// Prefer the manifest corresponding to the user-specified digest, if available.
 		if s.imageRef.named != nil {
 			if digested, ok := s.imageRef.named.(reference.Digested); ok {
-				key := manifestBigDataKey(digested.Digest())
+				key, err := manifestBigDataKey(digested.Digest())
+				if err != nil {
+					return nil, "", err
+				}
 				blob, err := s.imageRef.transport.store.ImageBigData(s.image.ID, key)
 				if err != nil && !os.IsNotExist(err) { // os.IsNotExist is true if the image exists but there is no data corresponding to key
 					return nil, "", err
@@ -320,7 +329,10 @@ func (s *storageImageSource) GetSignatures(ctx context.Context, instanceDigest *
 	instance := "default instance"
 	if instanceDigest != nil {
 		signatureSizes = s.SignaturesSizes[*instanceDigest]
-		key = signatureBigDataKey(*instanceDigest)
+		key, err = signatureBigDataKey(*instanceDigest)
+		if err != nil {
+			return nil, err
+		}
 		instance = instanceDigest.Encoded()
 	}
 	if len(signatureSizes) > 0 {
@@ -829,7 +841,10 @@ func (s *storageImageDestination) Commit(ctx context.Context, unparsedToplevel t
 		if err != nil {
 			return errors.Wrapf(err, "error digesting top-level manifest")
 		}
-		key := manifestBigDataKey(manifestDigest)
+		key, err := manifestBigDataKey(manifestDigest)
+		if err != nil {
+			return err
+		}
 		if err := s.imageRef.transport.store.SetImageBigData(img.ID, key, toplevelManifest, manifest.Digest); err != nil {
 			if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
 				logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
@@ -845,7 +860,10 @@ func (s *storageImageDestination) Commit(ctx context.Context, unparsedToplevel t
 	if err != nil {
 		return errors.Wrapf(err, "error computing manifest digest")
 	}
-	key := manifestBigDataKey(manifestDigest)
+	key, err := manifestBigDataKey(manifestDigest)
+	if err != nil {
+		return err
+	}
 	if err := s.imageRef.transport.store.SetImageBigData(img.ID, key, s.manifest, manifest.Digest); err != nil {
 		if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
 			logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)
@@ -872,7 +890,10 @@ func (s *storageImageDestination) Commit(ctx context.Context, unparsedToplevel t
 		}
 	}
 	for instanceDigest, signatures := range s.signatureses {
-		key := signatureBigDataKey(instanceDigest)
+		key, err := signatureBigDataKey(instanceDigest)
+		if err != nil {
+			return err
+		}
 		if err := s.imageRef.transport.store.SetImageBigData(img.ID, key, signatures, manifest.Digest); err != nil {
 			if _, err2 := s.imageRef.transport.store.DeleteImage(img.ID, true); err2 != nil {
 				logrus.Debugf("error deleting incomplete image %q: %v", img.ID, err2)

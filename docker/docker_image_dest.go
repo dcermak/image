@@ -494,11 +494,14 @@ func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte, i
 
 	// NOTE: Keep this in sync with docs/signature-protocols.md!
 	for i, signature := range signatures {
-		url := signatureStorageURL(d.c.signatureBase, *instanceDigest, i)
+		url, err := signatureStorageURL(d.c.signatureBase, *instanceDigest, i)
 		if url == nil {
 			return errors.Errorf("Internal error: signatureStorageURL with non-nil base returned nil")
 		}
-		err := d.putOneSignature(url, signature)
+		if err != nil {
+			return err
+		}
+		err = d.putOneSignature(url, signature)
 		if err != nil {
 			return err
 		}
@@ -509,9 +512,13 @@ func (d *dockerImageDestination) putSignaturesToLookaside(signatures [][]byte, i
 	// is enough for dockerImageSource to stop looking for other signatures, so that
 	// is sufficient.
 	for i := len(signatures); ; i++ {
-		url := signatureStorageURL(d.c.signatureBase, *instanceDigest, i)
+
+		url, err := signatureStorageURL(d.c.signatureBase, *instanceDigest, i)
 		if url == nil {
 			return errors.Errorf("Internal error: signatureStorageURL with non-nil base returned nil")
+		}
+		if err != nil {
+			return err
 		}
 		missing, err := d.c.deleteOneSignature(url)
 		if err != nil {

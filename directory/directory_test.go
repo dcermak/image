@@ -98,13 +98,14 @@ func (fn readerFromFunc) Read(p []byte) (int, error) {
 // TestPutBlobDigestFailure simulates behavior on digest verification failure.
 func TestPutBlobDigestFailure(t *testing.T) {
 	const digestErrorString = "Simulated digest error"
-	const blobDigest = digest.Digest("sha256:test-digest")
+	const blobDigest = digest.Digest("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	ref, tmpDir := refToTempDir(t)
 	defer os.RemoveAll(tmpDir)
 	dirRef, ok := ref.(dirReference)
 	require.True(t, ok)
-	blobPath := dirRef.layerPath(blobDigest)
+	blobPath, err := dirRef.layerPath(blobDigest)
+	require.NoError(t, err)
 	cache := memory.New()
 
 	firstRead := true

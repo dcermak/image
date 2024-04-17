@@ -335,9 +335,12 @@ func (s *dockerImageSource) getSignaturesFromLookaside(ctx context.Context, inst
 	// NOTE: Keep this in sync with docs/signature-protocols.md!
 	signatures := [][]byte{}
 	for i := 0; ; i++ {
-		url := signatureStorageURL(s.c.signatureBase, manifestDigest, i)
+		url, err := signatureStorageURL(s.c.signatureBase, manifestDigest, i)
 		if url == nil {
 			return nil, errors.Errorf("Internal error: signatureStorageURL with non-nil base returned nil")
+		}
+		if err != nil {
+			return nil, err
 		}
 		signature, missing, err := s.getOneSignature(ctx, url)
 		if err != nil {
@@ -481,9 +484,12 @@ func deleteImage(ctx context.Context, sys *types.SystemContext, ref dockerRefere
 		}
 
 		for i := 0; ; i++ {
-			url := signatureStorageURL(c.signatureBase, manifestDigest, i)
+			url, err := signatureStorageURL(c.signatureBase, manifestDigest, i)
 			if url == nil {
 				return errors.Errorf("Internal error: signatureStorageURL with non-nil base returned nil")
+			}
+			if err != nil {
+				return err
 			}
 			missing, err := c.deleteOneSignature(url)
 			if err != nil {
